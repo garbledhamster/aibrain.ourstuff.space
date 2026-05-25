@@ -66,18 +66,18 @@
                 <span id="authState" class="chip">Signed out</span>
               </div>
               <p id="authMessage" class="auth-message">Sign in with Firebase to continue.</p>
-              <label>
+              <label class="auth-signin-control">
                 Email / username
                 <input id="email" type="email" autocomplete="username" placeholder="you@example.com">
               </label>
-              <label>
+              <label class="auth-signin-control">
                 Password
                 <input id="password" type="password" autocomplete="current-password">
               </label>
               <div class="actions">
-                <button id="googleSignInBtn" type="button">Continue with Google</button>
-                <button id="createAccountBtn" type="button">Create</button>
-                <button class="primary" type="submit">Sign In</button>
+                <button id="googleSignInBtn" class="auth-signin-control" type="button">Continue with Google</button>
+                <button id="createAccountBtn" class="auth-signin-control" type="button">Create</button>
+                <button class="primary auth-signin-control" type="submit">Sign In</button>
                 <button id="signOutBtn" type="button">Sign Out</button>
               </div>
             </form>

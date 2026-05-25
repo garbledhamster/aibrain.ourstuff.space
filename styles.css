@@ -576,6 +576,10 @@ body.is-authenticated .auth-message {
 	display: none;
 }
 
+body.is-authenticated .auth-signin-control {
+	display: none;
+}
+
 @media (max-width: 980px) {
 	.admin-shell {
 		grid-template-columns: 1fr;
