@@ -1,0 +1,3 @@
+# AI Brain Admin
+
+AI Brain Admin is the private ourstuff.space dashboard for Firebase-authenticated account bootstrap, shared cloud subscription status, global usage counters, API keys, and memory workflows.

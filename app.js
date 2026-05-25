@@ -11,6 +11,7 @@ const state = {
 	apiKeys: [],
 	events: [],
 	oneTimeKey: "",
+	accountRefresh: null,
 };
 
 const els = {
@@ -45,6 +46,7 @@ const els = {
 	aiUsage: document.querySelector("#aiUsage"),
 	blockedUsage: document.querySelector("#blockedUsage"),
 	usageDay: document.querySelector("#usageDay"),
+	usageScope: document.querySelector("#usageScope"),
 	readsMeter: document.querySelector("#readsMeter"),
 	writesMeter: document.querySelector("#writesMeter"),
 	aiMeter: document.querySelector("#aiMeter"),
@@ -260,9 +262,50 @@ function updateUsage(usage) {
 	els.aiUsage.textContent = `${usage.ai.used} / ${usage.ai.limit}`;
 	els.blockedUsage.textContent = `${usage.blocked || 0}`;
 	els.usageDay.textContent = `${usage.day} UTC`;
+	els.usageScope.textContent =
+		usage.scope && usage.source
+			? `${usage.scope} ${usage.source}`
+			: "ourstuff.space global";
 	els.readsMeter.style.width = `${readPercent}%`;
 	els.writesMeter.style.width = `${writePercent}%`;
 	els.aiMeter.style.width = `${aiPercent}%`;
+}
+
+function clearAccountData() {
+	updateEntitlement(null);
+	updateUsage(null);
+	renderApiKeys([]);
+	renderActivity([]);
+	writeAccount({});
+	writeBilling({});
+}
+
+function hasAuthToken() {
+	return Boolean(state.idToken || els.token.value.trim());
+}
+
+function requireAccountAuth(action = "refresh account data") {
+	if (hasAuthToken()) {
+		return true;
+	}
+	setStatus(`Sign in to ${action}`, "bad");
+	return false;
+}
+
+async function refreshSignedInAccount() {
+	if (!requireAccountAuth("refresh account data")) {
+		return;
+	}
+	if (state.accountRefresh) {
+		return state.accountRefresh;
+	}
+	state.accountRefresh = (async () => {
+		await bootstrapUser();
+		await loadCategories();
+	})().finally(() => {
+		state.accountRefresh = null;
+	});
+	return state.accountRefresh;
 }
 
 function selectedApiKeyScopes() {
@@ -365,8 +408,10 @@ async function initializeFirebase() {
 		state.idToken = user ? await user.getIdToken() : "";
 		updateConnectionLabels();
 		if (user) {
-			setStatus("Signed in", "good");
-			await bootstrapUser();
+			setStatus("Signed in. Refreshing account data...", "good");
+			await refreshSignedInAccount();
+		} else {
+			clearAccountData();
 		}
 	});
 	state.authModule = authModule;
@@ -430,6 +475,7 @@ async function signOutUser() {
 		}
 		state.user = null;
 		state.idToken = "";
+		clearAccountData();
 		updateConnectionLabels();
 		setStatus("Signed out");
 	} catch (error) {
@@ -450,6 +496,9 @@ async function checkHealth() {
 }
 
 async function bootstrapUser() {
+	if (!requireAccountAuth("bootstrap your account")) {
+		return;
+	}
 	try {
 		const data = await api("/bootstrap-user", {
 			method: "POST",
@@ -472,6 +521,9 @@ async function bootstrapUser() {
 }
 
 async function loadUsage() {
+	if (!requireAccountAuth("load usage")) {
+		return;
+	}
 	try {
 		const data = await api("/account/usage");
 		updateUsage(data.usage);
@@ -482,6 +534,9 @@ async function loadUsage() {
 }
 
 async function loadApiKeys() {
+	if (!requireAccountAuth("load API keys")) {
+		return;
+	}
 	try {
 		const data = await api("/api-keys");
 		renderApiKeys(data.keys || []);
@@ -493,6 +548,9 @@ async function loadApiKeys() {
 
 async function createKey(event) {
 	event.preventDefault();
+	if (!requireAccountAuth("create an API key")) {
+		return;
+	}
 	try {
 		const data = await api("/api-keys", {
 			method: "POST",
@@ -513,6 +571,9 @@ async function createKey(event) {
 }
 
 async function revokeKey(keyId) {
+	if (!requireAccountAuth("revoke an API key")) {
+		return;
+	}
 	try {
 		await api(`/api-keys/${encodeURIComponent(keyId)}`, { method: "DELETE" });
 		await loadApiKeys();
@@ -536,6 +597,9 @@ async function copyOneTimeKey() {
 }
 
 async function loadActivity() {
+	if (!requireAccountAuth("load activity")) {
+		return;
+	}
 	try {
 		const data = await api("/account/events?limit=50");
 		renderActivity(data.events || []);
@@ -546,6 +610,9 @@ async function loadActivity() {
 }
 
 async function refreshEntitlement() {
+	if (!requireAccountAuth("load subscription plan")) {
+		return;
+	}
 	try {
 		const data = await api("/billing/entitlement");
 		updateEntitlement(data.entitlement);
@@ -566,6 +633,9 @@ function returnUrl() {
 }
 
 async function startCheckout() {
+	if (!requireAccountAuth("start checkout")) {
+		return;
+	}
 	try {
 		const data = await api("/subscriptions/checkout", {
 			method: "POST",
@@ -595,6 +665,9 @@ async function startCheckout() {
 }
 
 async function openPortal() {
+	if (!requireAccountAuth("open the billing portal")) {
+		return;
+	}
 	try {
 		const data = await api("/subscriptions/portal", {
 			method: "POST",
@@ -612,6 +685,9 @@ async function openPortal() {
 }
 
 async function localSubscription(path, label) {
+	if (!requireAccountAuth("change local subscription state")) {
+		return;
+	}
 	try {
 		const data = await api(path, { method: "POST", body: JSON.stringify({}) });
 		updateEntitlement(data.entitlement);
@@ -623,6 +699,9 @@ async function localSubscription(path, label) {
 }
 
 async function loadCategories() {
+	if (!requireAccountAuth("load categories")) {
+		return;
+	}
 	try {
 		const data = await api("/categories");
 		state.categories = data.categories;
@@ -640,6 +719,9 @@ async function loadCategories() {
 }
 
 async function scrubMemory() {
+	if (!requireAccountAuth("scrub memory")) {
+		return;
+	}
 	try {
 		const data = await api("/scrub", {
 			method: "POST",
@@ -670,6 +752,9 @@ function tagsFromInput() {
 
 async function rememberMemory(event) {
 	event.preventDefault();
+	if (!requireAccountAuth("save memory")) {
+		return;
+	}
 	try {
 		const data = await api("/remember", {
 			method: "POST",
@@ -749,6 +834,9 @@ function memoryItem(memory) {
 }
 
 async function loadMemories() {
+	if (!requireAccountAuth("load memories")) {
+		return;
+	}
 	try {
 		const params = new URLSearchParams();
 		if (els.memorySearch.value) {
@@ -766,6 +854,9 @@ async function loadMemories() {
 }
 
 async function runMemoryAction(id, action) {
+	if (!requireAccountAuth(`${action} memory`)) {
+		return;
+	}
 	try {
 		const method = action === "delete" ? "DELETE" : "POST";
 		const path =
@@ -780,6 +871,9 @@ async function runMemoryAction(id, action) {
 }
 
 async function loadContext(rebuild = false) {
+	if (!requireAccountAuth(rebuild ? "rebuild context" : "load context")) {
+		return;
+	}
 	try {
 		const project = encodeURIComponent(els.contextProject.value);
 		const consumer = encodeURIComponent(els.contextConsumer.value);
@@ -811,6 +905,9 @@ function auditItem(event) {
 }
 
 async function loadAudit() {
+	if (!requireAccountAuth("load audit events")) {
+		return;
+	}
 	try {
 		const data = await api("/audit");
 		els.auditList.replaceChildren(...data.events.map(auditItem));
@@ -910,8 +1007,3 @@ document.querySelector("#loadAuditBtn").addEventListener("click", loadAudit);
 initializeConnectionFields();
 await initializeFirebase();
 await checkHealth();
-await loadCategories();
-await refreshEntitlement();
-await loadUsage();
-await loadApiKeys();
-await loadActivity();
