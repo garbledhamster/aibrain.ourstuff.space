@@ -138,7 +138,6 @@ function activeToken() {
 function requestHeaders() {
 	const headers = {
 		"Content-Type": "application/json",
-		"X-Brain-Consumer": "mort",
 	};
 	const token = activeToken();
 	if (token) {
@@ -148,13 +147,21 @@ function requestHeaders() {
 }
 
 async function api(path, options = {}) {
-	const response = await fetch(`${apiBase()}${path}`, {
-		...options,
-		headers: {
-			...requestHeaders(),
-			...(options.headers || {}),
-		},
-	});
+	let response;
+	const url = `${apiBase()}${path}`;
+	try {
+		response = await fetch(url, {
+			...options,
+			headers: {
+				...requestHeaders(),
+				...(options.headers || {}),
+			},
+		});
+	} catch (error) {
+		throw new Error(
+			`Network/CORS request failed for ${url}. Check the API base and allowed request headers. ${error.message}`,
+		);
+	}
 	const text = await response.text();
 	const data = text ? JSON.parse(text) : {};
 	if (!response.ok) {
