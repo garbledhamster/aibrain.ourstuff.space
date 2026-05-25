@@ -1,13 +1,13 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>2026-05-25 AI Brain API</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>2026-05-25 AI Brain Admin</title>
+    <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
-    <div class="app-shell">
+    <div class="admin-shell">
       <aside class="sidebar">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true">
@@ -15,12 +15,17 @@
           </div>
           <div>
             <h1>AI Brain</h1>
-            <p>ourstuff.space</p>
+            <p>aibrain.ourstuff.space</p>
           </div>
         </div>
 
-        <nav class="tabs" aria-label="Views">
-          <button class="tab is-active" data-view="capture" type="button">Capture</button>
+        <nav class="tabs" aria-label="Admin views">
+          <button class="tab is-active" data-view="account" type="button">Account</button>
+          <button class="tab" data-view="billing" type="button">Billing</button>
+          <button class="tab" data-view="apiKeys" type="button">API Keys</button>
+          <button class="tab" data-view="usage" type="button">Usage</button>
+          <button class="tab" data-view="activity" type="button">Activity</button>
+          <button class="tab" data-view="capture" type="button">Capture</button>
           <button class="tab" data-view="memories" type="button">Memories</button>
           <button class="tab" data-view="context" type="button">Context</button>
           <button class="tab" data-view="audit" type="button">Audit</button>
@@ -29,32 +34,198 @@
         <section class="panel compact">
           <label>
             API base
-            <input id="apiBase" spellcheck="false" />
+            <input id="apiBase" type="url" spellcheck="false">
           </label>
           <label>
-            Token
-            <input id="token" spellcheck="false" autocomplete="off" placeholder="Paste Firebase ID token or tool token" />
+            Local/tool token
+            <input id="token" type="password" spellcheck="false" autocomplete="current-password">
           </label>
-          <button id="healthBtn" type="button">Health</button>
+          <div class="split-actions">
+            <button id="healthBtn" type="button">Health</button>
+            <button id="localTokenBtn" type="button">Local Auth</button>
+          </div>
         </section>
       </aside>
 
       <main class="workspace">
         <header class="topbar">
           <div>
-            <p class="eyebrow">2026-05-25</p>
-            <h2 id="viewTitle">Capture Memory</h2>
+            <p class="eyebrow">2026-05-25 Firebase Live</p>
+            <h2 id="viewTitle">Account</h2>
           </div>
           <div id="status" class="status">Ready</div>
         </header>
 
-        <section id="capture" class="view is-active" aria-labelledby="viewTitle">
+        <section id="account" class="view is-active" aria-labelledby="viewTitle">
+          <div class="grid two">
+            <form id="authForm" class="panel">
+              <div class="panel-title">
+                <h3>Sign In</h3>
+                <span id="authState" class="chip">Signed out</span>
+              </div>
+              <label>
+                Email / username
+                <input id="email" type="email" autocomplete="username" placeholder="you@example.com">
+              </label>
+              <label>
+                Password
+                <input id="password" type="password" autocomplete="current-password">
+              </label>
+              <div class="actions">
+                <button id="googleSignInBtn" type="button">Continue with Google</button>
+                <button id="createAccountBtn" type="button">Create</button>
+                <button class="primary" type="submit">Sign In</button>
+                <button id="signOutBtn" type="button">Sign Out</button>
+              </div>
+            </form>
+
+            <section class="panel">
+              <div class="panel-title">
+                <h3>Connection</h3>
+                <button id="bootstrapBtn" type="button">Bootstrap</button>
+              </div>
+              <dl class="facts">
+                <div><dt>User</dt><dd id="userLabel">Not signed in</dd></div>
+                <div><dt>Firebase</dt><dd id="firebaseLabel">Not configured</dd></div>
+                <div><dt>API</dt><dd id="apiLabel">Not checked</dd></div>
+                <div><dt>Token</dt><dd id="tokenLabel">None</dd></div>
+              </dl>
+              <pre id="accountOutput">{}</pre>
+            </section>
+          </div>
+        </section>
+
+        <section id="billing" class="view">
+          <div class="grid two">
+            <section class="panel">
+              <div class="panel-title">
+                <h3>Subscription</h3>
+                <span id="cloudState" class="chip">Unknown</span>
+              </div>
+              <div class="quota">
+                <div>
+                  <span id="quotaUsed">0 B</span>
+                  <small>used</small>
+                </div>
+                <div>
+                  <span id="quotaLimit">0 B</span>
+                  <small>shared pool</small>
+                </div>
+              </div>
+              <progress id="quotaMeter" class="meter" value="0" max="100" aria-label="Storage usage">0%</progress>
+              <dl class="facts">
+                <div><dt>Plan</dt><dd id="planLabel">None</dd></div>
+                <div><dt>Status</dt><dd id="subscriptionLabel">Unknown</dd></div>
+                <div><dt>Coverage</dt><dd id="coverageLabel">Not loaded</dd></div>
+              </dl>
+              <div class="actions">
+                <button id="refreshEntitlementBtn" type="button">Refresh</button>
+                <button class="primary" id="checkoutBtn" type="button">Subscribe</button>
+                <button id="portalBtn" type="button">Manage Billing</button>
+              </div>
+              <div class="actions local-actions">
+                <button id="mockSubscribeBtn" type="button">Activate Local</button>
+                <button id="mockCancelBtn" type="button">Clear Local</button>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-title">
+                <h3>Billing Result</h3>
+                <button id="clearBillingBtn" type="button">Clear</button>
+              </div>
+              <pre id="billingOutput">{}</pre>
+            </section>
+          </div>
+        </section>
+
+        <section id="apiKeys" class="view">
+          <div class="grid two">
+            <form id="apiKeyForm" class="panel">
+              <div class="panel-title">
+                <h3>Create API Key</h3>
+                <span id="keyLimitLabel" class="chip">1 active key</span>
+              </div>
+              <label>
+                Name
+                <input id="apiKeyName" type="text" maxlength="80" value="AI Brain local tool">
+              </label>
+              <fieldset>
+                <legend>Scopes</legend>
+                <label><input class="api-key-scope" type="checkbox" value="brain:read" checked> Read</label>
+                <label><input class="api-key-scope" type="checkbox" value="brain:remember" checked> Write</label>
+              </fieldset>
+              <div class="actions">
+                <button id="refreshKeysBtn" type="button">Refresh</button>
+                <button class="primary" type="submit">Create Key</button>
+              </div>
+              <div id="oneTimeKeyWrap" class="secret-box" hidden>
+                <div class="panel-title">
+                  <h3>One-Time Key</h3>
+                  <button id="copyKeyBtn" type="button">Copy</button>
+                </div>
+                <code id="oneTimeKey"></code>
+              </div>
+            </form>
+
+            <section class="panel">
+              <div class="panel-title">
+                <h3>Active Keys</h3>
+                <span id="apiKeyCount" class="chip">0 keys</span>
+              </div>
+              <div id="apiKeyList" class="list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="usage" class="view">
+          <section class="panel">
+            <div class="panel-title">
+              <h3>Daily Beta Limits</h3>
+              <button id="refreshUsageBtn" type="button">Refresh</button>
+            </div>
+            <div class="usage-grid">
+              <article class="usage-card">
+                <span>Reads</span>
+                <strong id="readsUsage">0 / 300</strong>
+                <div class="meter"><span id="readsMeter"></span></div>
+              </article>
+              <article class="usage-card">
+                <span>Writes</span>
+                <strong id="writesUsage">0 / 50</strong>
+                <div class="meter"><span id="writesMeter"></span></div>
+              </article>
+              <article class="usage-card">
+                <span>AI / Scrub</span>
+                <strong id="aiUsage">0 / 30</strong>
+                <div class="meter"><span id="aiMeter"></span></div>
+              </article>
+              <article class="usage-card">
+                <span>Blocked</span>
+                <strong id="blockedUsage">0</strong>
+                <small id="usageDay">UTC day</small>
+              </article>
+            </div>
+          </section>
+        </section>
+
+        <section id="activity" class="view">
+          <section class="panel">
+            <div class="panel-title">
+              <h3>Important Events</h3>
+              <button id="refreshActivityBtn" type="button">Refresh</button>
+            </div>
+            <div id="activityList" class="list"></div>
+          </section>
+        </section>
+
+        <section id="capture" class="view">
           <div class="grid two">
             <form id="rememberForm" class="panel">
               <div class="row">
                 <label>
                   Project
-                  <input id="projectSlug" value="ourstuff.space" maxlength="160" />
+                  <input id="projectSlug" type="text" value="ourstuff.space" maxlength="160">
                 </label>
                 <label>
                   Source
@@ -76,28 +247,28 @@
                 </label>
                 <label>
                   Tags
-                  <input id="tags" placeholder="firebase, context" />
+                  <input id="tags" type="text" placeholder="firebase, billing">
                 </label>
               </div>
 
               <fieldset>
                 <legend>Consumers</legend>
-                <label><input type="checkbox" name="consumer" value="chatgpt" checked /> ChatGPT</label>
-                <label><input type="checkbox" name="consumer" value="codex" checked /> Codex</label>
-                <label><input type="checkbox" name="consumer" value="mort" checked /> MORT</label>
-                <label><input type="checkbox" name="consumer" value="mcp" checked /> MCP</label>
-                <label><input type="checkbox" name="consumer" value="browser" /> Browser</label>
-                <label><input type="checkbox" name="consumer" value="powershell" /> PowerShell</label>
+                <label><input class="consumer-option" type="checkbox" value="chatgpt" checked> ChatGPT</label>
+                <label><input class="consumer-option" type="checkbox" value="codex" checked> Codex</label>
+                <label><input class="consumer-option" type="checkbox" value="mort" checked> MORT</label>
+                <label><input class="consumer-option" type="checkbox" value="mcp" checked> MCP</label>
+                <label><input class="consumer-option" type="checkbox" value="browser"> Browser</label>
+                <label><input class="consumer-option" type="checkbox" value="powershell"> PowerShell</label>
               </fieldset>
 
               <label class="toggle">
-                <input id="allowRawStorage" type="checkbox" />
+                <input id="allowRawStorage" type="checkbox">
                 <span>Approved raw artifact</span>
               </label>
 
               <label>
                 Memory text
-                <textarea id="memoryText" rows="12">Remember this: the AI Brain API should scrub content before classification and keep new memories in draft.</textarea>
+                <textarea id="memoryText" rows="12">Remember this: aibrain.ourstuff.space uses Firebase Auth and the shared ourstuff.space cloud subscription entitlement.</textarea>
               </label>
 
               <div class="actions">
@@ -109,7 +280,7 @@
             <section class="panel output-panel">
               <div class="panel-title">
                 <h3>Result</h3>
-                <button id="clearOutputBtn" type="button" title="Clear output">Clear</button>
+                <button id="clearOutputBtn" type="button">Clear</button>
               </div>
               <pre id="output">{}</pre>
             </section>
@@ -119,7 +290,7 @@
         <section id="memories" class="view">
           <section class="panel">
             <div class="toolbar">
-              <input id="memorySearch" placeholder="Search memories" />
+              <input id="memorySearch" type="search" placeholder="Search memories">
               <select id="memoryStatus">
                 <option value="">Any status</option>
                 <option value="draft">Draft</option>
@@ -138,7 +309,7 @@
         <section id="context" class="view">
           <section class="panel">
             <div class="toolbar">
-              <input id="contextProject" value="ourstuff.space" />
+              <input id="contextProject" type="text" value="ourstuff.space">
               <select id="contextConsumer">
                 <option value="codex">Codex</option>
                 <option value="chatgpt">ChatGPT</option>
