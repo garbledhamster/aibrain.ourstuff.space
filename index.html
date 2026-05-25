@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>2026-05-25 AI Brain API</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <div>
+            <h1>AI Brain</h1>
+            <p>ourstuff.space</p>
+          </div>
+        </div>
+
+        <nav class="tabs" aria-label="Views">
+          <button class="tab is-active" data-view="capture" type="button">Capture</button>
+          <button class="tab" data-view="memories" type="button">Memories</button>
+          <button class="tab" data-view="context" type="button">Context</button>
+          <button class="tab" data-view="audit" type="button">Audit</button>
+        </nav>
+
+        <section class="panel compact">
+          <label>
+            API base
+            <input id="apiBase" spellcheck="false" />
+          </label>
+          <label>
+            Token
+            <input id="token" spellcheck="false" autocomplete="off" placeholder="Paste Firebase ID token or tool token" />
+          </label>
+          <button id="healthBtn" type="button">Health</button>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">2026-05-25</p>
+            <h2 id="viewTitle">Capture Memory</h2>
+          </div>
+          <div id="status" class="status">Ready</div>
+        </header>
+
+        <section id="capture" class="view is-active" aria-labelledby="viewTitle">
+          <div class="grid two">
+            <form id="rememberForm" class="panel">
+              <div class="row">
+                <label>
+                  Project
+                  <input id="projectSlug" value="ourstuff.space" maxlength="160" />
+                </label>
+                <label>
+                  Source
+                  <select id="sourceApp">
+                    <option value="codex">Codex</option>
+                    <option value="chatgpt">ChatGPT</option>
+                    <option value="browser">Browser</option>
+                    <option value="powershell">PowerShell</option>
+                    <option value="mort">MORT</option>
+                    <option value="api">API</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="row">
+                <label>
+                  Category
+                  <select id="category"></select>
+                </label>
+                <label>
+                  Tags
+                  <input id="tags" placeholder="firebase, context" />
+                </label>
+              </div>
+
+              <fieldset>
+                <legend>Consumers</legend>
+                <label><input type="checkbox" name="consumer" value="chatgpt" checked /> ChatGPT</label>
+                <label><input type="checkbox" name="consumer" value="codex" checked /> Codex</label>
+                <label><input type="checkbox" name="consumer" value="mort" checked /> MORT</label>
+                <label><input type="checkbox" name="consumer" value="mcp" checked /> MCP</label>
+                <label><input type="checkbox" name="consumer" value="browser" /> Browser</label>
+                <label><input type="checkbox" name="consumer" value="powershell" /> PowerShell</label>
+              </fieldset>
+
+              <label class="toggle">
+                <input id="allowRawStorage" type="checkbox" />
+                <span>Approved raw artifact</span>
+              </label>
+
+              <label>
+                Memory text
+                <textarea id="memoryText" rows="12">Remember this: the AI Brain API should scrub content before classification and keep new memories in draft.</textarea>
+              </label>
+
+              <div class="actions">
+                <button type="button" id="scrubBtn">Scrub</button>
+                <button type="submit" class="primary">Remember</button>
+              </div>
+            </form>
+
+            <section class="panel output-panel">
+              <div class="panel-title">
+                <h3>Result</h3>
+                <button id="clearOutputBtn" type="button" title="Clear output">Clear</button>
+              </div>
+              <pre id="output">{}</pre>
+            </section>
+          </div>
+        </section>
+
+        <section id="memories" class="view">
+          <section class="panel">
+            <div class="toolbar">
+              <input id="memorySearch" placeholder="Search memories" />
+              <select id="memoryStatus">
+                <option value="">Any status</option>
+                <option value="draft">Draft</option>
+                <option value="approved">Approved</option>
+                <option value="locked">Locked</option>
+                <option value="archived">Archived</option>
+                <option value="rejected">Rejected</option>
+                <option value="quarantined">Quarantined</option>
+              </select>
+              <button id="refreshMemoriesBtn" type="button">Refresh</button>
+            </div>
+            <div id="memoryList" class="list"></div>
+          </section>
+        </section>
+
+        <section id="context" class="view">
+          <section class="panel">
+            <div class="toolbar">
+              <input id="contextProject" value="ourstuff.space" />
+              <select id="contextConsumer">
+                <option value="codex">Codex</option>
+                <option value="chatgpt">ChatGPT</option>
+                <option value="mort">MORT</option>
+                <option value="mcp">MCP</option>
+                <option value="browser">Browser</option>
+                <option value="powershell">PowerShell</option>
+              </select>
+              <button id="loadContextBtn" type="button">Load</button>
+              <button id="rebuildContextBtn" type="button">Rebuild</button>
+            </div>
+            <pre id="contextOutput">{}</pre>
+          </section>
+        </section>
+
+        <section id="audit" class="view">
+          <section class="panel">
+            <div class="toolbar">
+              <button id="loadAuditBtn" type="button">Load Audit</button>
+            </div>
+            <div id="auditList" class="list"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="./config.js"></script>
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
