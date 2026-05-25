@@ -163,11 +163,26 @@ async function api(path, options = {}) {
 		);
 	}
 	const text = await response.text();
-	const data = text ? JSON.parse(text) : {};
+	let data = {};
+	try {
+		data = text ? JSON.parse(text) : {};
+	} catch {
+		data = { raw: text };
+	}
 	if (!response.ok) {
+		const code = data?.error?.code ? ` ${data.error.code}` : "";
 		const message =
-			data?.error?.message || `Request failed with ${response.status}`;
-		throw new Error(message);
+			data?.error?.message ||
+			data?.message ||
+			data?.raw ||
+			response.statusText ||
+			"Request failed";
+		const error = new Error(`${response.status}${code} at ${path}: ${message}`);
+		error.status = response.status;
+		error.code = data?.error?.code || "";
+		error.endpoint = path;
+		error.details = data?.error?.details;
+		throw error;
 	}
 	return data;
 }
@@ -182,6 +197,22 @@ function writeBilling(value) {
 
 function writeOutput(value) {
 	els.output.textContent = JSON.stringify(value, null, 2);
+}
+
+function apiErrorDetails(error) {
+	return {
+		ok: false,
+		status: error.status || null,
+		code: error.code || null,
+		endpoint: error.endpoint || null,
+		message: error.message,
+		details: error.details,
+	};
+}
+
+function showApiError(error, writer = writeOutput) {
+	writer(apiErrorDetails(error));
+	setStatus(error.message, "bad");
 }
 
 function formatBytes(value = 0) {
@@ -521,7 +552,7 @@ async function bootstrapUser() {
 		writeAccount(data);
 		setStatus("Bootstrap complete", "good");
 	} catch (error) {
-		setStatus(error.message, "bad");
+		showApiError(error, writeAccount);
 	} finally {
 		updateConnectionLabels();
 	}
@@ -536,7 +567,7 @@ async function loadUsage() {
 		updateUsage(data.usage);
 		setStatus("Usage loaded", "good");
 	} catch (error) {
-		setStatus(error.message, "bad");
+		showApiError(error, writeAccount);
 	}
 }
 
@@ -549,7 +580,7 @@ async function loadApiKeys() {
 		renderApiKeys(data.keys || []);
 		setStatus(`${data.keys.length} API keys`, "good");
 	} catch (error) {
-		setStatus(error.message, "bad");
+		showApiError(error, writeBilling);
 	}
 }
 
@@ -573,7 +604,7 @@ async function createKey(event) {
 		await loadActivity();
 		setStatus("API key created", "good");
 	} catch (error) {
-		setStatus(error.message, "bad");
+		showApiError(error);
 	}
 }
 
@@ -587,7 +618,7 @@ async function revokeKey(keyId) {
 		await loadActivity();
 		setStatus("API key revoked", "good");
 	} catch (error) {
-		setStatus(error.message, "bad");
+		showApiError(error);
 	}
 }
 
@@ -612,7 +643,7 @@ async function loadActivity() {
 		renderActivity(data.events || []);
 		setStatus(`${data.events.length} events`, "good");
 	} catch (error) {
-		setStatus(error.message, "bad");
+		showApiError(error, writeAccount);
 	}
 }
 
@@ -631,12 +662,16 @@ async function refreshEntitlement() {
 			data.entitlement.cloud ? "good" : "",
 		);
 	} catch (error) {
-		setStatus(error.message, "bad");
+		showApiError(error, writeBilling);
 	}
 }
 
 function returnUrl() {
 	return `${window.location.origin}${window.location.pathname}`;
+}
+
+function subscriptionSiteId() {
+	return runtimeConfig.siteId || "ourstuff";
 }
 
 async function startCheckout() {
@@ -647,7 +682,7 @@ async function startCheckout() {
 		const data = await api("/subscriptions/checkout", {
 			method: "POST",
 			body: JSON.stringify({
-				site: runtimeConfig.siteId || "aibrain",
+				site: subscriptionSiteId(),
 				appId: runtimeConfig.appId || "aibrain",
 				returnUrl: returnUrl(),
 			}),
@@ -667,7 +702,7 @@ async function startCheckout() {
 			"good",
 		);
 	} catch (error) {
-		setStatus(error.message, "bad");
+		showApiError(error);
 	}
 }
 
@@ -678,7 +713,10 @@ async function openPortal() {
 	try {
 		const data = await api("/subscriptions/portal", {
 			method: "POST",
-			body: JSON.stringify({ returnUrl: returnUrl() }),
+			body: JSON.stringify({
+				site: subscriptionSiteId(),
+				returnUrl: returnUrl(),
+			}),
 		});
 		writeBilling(data);
 		if (data.url) {
@@ -687,7 +725,7 @@ async function openPortal() {
 		}
 		setStatus(data.message || "No billing portal needed", "good");
 	} catch (error) {
-		setStatus(error.message, "bad");
+		showApiError(error, writeBilling);
 	}
 }
 
@@ -701,7 +739,7 @@ async function localSubscription(path, label) {
 		writeBilling(data);
 		setStatus(label, "good");
 	} catch (error) {
-		setStatus(error.message, "bad");
+		showApiError(error, writeBilling);
 	}
 }
 
@@ -721,7 +759,7 @@ async function loadCategories() {
 			}),
 		);
 	} catch (error) {
-		setStatus(error.message, "bad");
+		showApiError(error);
 	}
 }
 
@@ -740,7 +778,7 @@ async function scrubMemory() {
 			data.blocked ? "bad" : "good",
 		);
 	} catch (error) {
-		setStatus(error.message, "bad");
+		showApiError(error);
 	}
 }
 
@@ -780,7 +818,7 @@ async function rememberMemory(event) {
 		await loadMemories();
 		await refreshEntitlement();
 	} catch (error) {
-		setStatus(error.message, "bad");
+		showApiError(error);
 	}
 }
 
@@ -856,7 +894,7 @@ async function loadMemories() {
 		els.memoryList.replaceChildren(...data.memories.map(memoryItem));
 		setStatus(`${data.memories.length} memories`, "good");
 	} catch (error) {
-		setStatus(error.message, "bad");
+		showApiError(error);
 	}
 }
 
@@ -873,7 +911,7 @@ async function runMemoryAction(id, action) {
 		setStatus(`${action} complete`, "good");
 		await loadMemories();
 	} catch (error) {
-		setStatus(error.message, "bad");
+		showApiError(error);
 	}
 }
 
@@ -889,6 +927,11 @@ async function loadContext(rebuild = false) {
 		els.contextOutput.textContent = JSON.stringify(data, null, 2);
 		setStatus(rebuild ? "Context rebuilt" : "Context loaded", "good");
 	} catch (error) {
+		els.contextOutput.textContent = JSON.stringify(
+			apiErrorDetails(error),
+			null,
+			2,
+		);
 		setStatus(error.message, "bad");
 	}
 }
@@ -920,7 +963,7 @@ async function loadAudit() {
 		els.auditList.replaceChildren(...data.events.map(auditItem));
 		setStatus(`${data.events.length} audit events`, "good");
 	} catch (error) {
-		setStatus(error.message, "bad");
+		showApiError(error);
 	}
 }
 
@@ -980,16 +1023,20 @@ document
 	.addEventListener("click", loadActivity);
 document.querySelector("#checkoutBtn").addEventListener("click", startCheckout);
 document.querySelector("#portalBtn").addEventListener("click", openPortal);
-document
-	.querySelector("#mockSubscribeBtn")
-	.addEventListener("click", () =>
-		localSubscription("/billing/mock-subscribe", "Local subscription active"),
-	);
-document
-	.querySelector("#mockCancelBtn")
-	.addEventListener("click", () =>
-		localSubscription("/billing/mock-cancel", "Local subscription cleared"),
-	);
+if (isLocalPage()) {
+	document
+		.querySelector("#mockSubscribeBtn")
+		.addEventListener("click", () =>
+			localSubscription("/billing/mock-subscribe", "Local subscription active"),
+		);
+	document
+		.querySelector("#mockCancelBtn")
+		.addEventListener("click", () =>
+			localSubscription("/billing/mock-cancel", "Local subscription cleared"),
+		);
+} else {
+	document.querySelector(".local-actions")?.remove();
+}
 document
 	.querySelector("#clearBillingBtn")
 	.addEventListener("click", () => writeBilling({}));
