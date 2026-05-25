@@ -1,6 +1,6 @@
 window.AI_BRAIN_ADMIN_CONFIG = {
 	appId: "aibrain",
-	siteId: "aibrain",
+	siteId: "ourstuff",
 	localApiBase: "http://localhost:8800/api/v1",
 	productionApiBase: "https://api.ourstuff.space/v1",
 	localDevToken: "dev-local-token",
