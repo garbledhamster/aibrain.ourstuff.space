@@ -228,6 +228,24 @@ pre {
 	color: var(--red);
 }
 
+.auth-message {
+	margin: 0;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	background: var(--surface-2);
+	color: var(--muted);
+	padding: 10px 11px;
+	line-height: 1.4;
+}
+
+.auth-message.good {
+	color: var(--green);
+}
+
+.auth-message.bad {
+	color: var(--red);
+}
+
 .view {
 	display: none;
 	padding: 24px;
@@ -523,6 +541,39 @@ fieldset input,
 
 .usage-card strong {
 	font-size: 1.18rem;
+}
+
+body.is-signed-out .admin-shell {
+	grid-template-columns: minmax(0, 1fr);
+	min-height: 100vh;
+}
+
+body.is-signed-out .sidebar,
+body.is-signed-out .topbar,
+body.is-signed-out .view:not(#account),
+body.is-signed-out .connection-panel,
+body.is-signed-out #signOutBtn {
+	display: none;
+}
+
+body.is-signed-out .workspace {
+	display: block;
+}
+
+body.is-signed-out #account {
+	min-height: 100vh;
+	display: grid;
+	place-items: center;
+	padding: clamp(16px, 5vw, 48px);
+}
+
+body.is-signed-out #account .grid.two {
+	width: min(100%, 440px);
+	grid-template-columns: 1fr;
+}
+
+body.is-authenticated .auth-message {
+	display: none;
 }
 
 @media (max-width: 980px) {
