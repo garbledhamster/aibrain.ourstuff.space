@@ -407,8 +407,12 @@ async function refreshSignedInAccount() {
 		return state.accountRefresh;
 	}
 	state.accountRefresh = (async () => {
+		setStatus("Loading account data...", "");
 		await bootstrapUser();
 		await loadCategories();
+		await loadMemories();
+		await loadContext(false);
+		await loadAudit();
 	})().finally(() => {
 		state.accountRefresh = null;
 	});
@@ -1135,6 +1139,7 @@ initializeConnectionFields();
 await initializeFirebase();
 if (appAccessAllowed()) {
 	setStatus(state.user ? "Signed in" : "Local auth ready", "good");
+	await refreshSignedInAccount();
 } else {
 	setStatus("Sign in with Firebase to continue.");
 }
