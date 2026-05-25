@@ -20,6 +20,7 @@ const els = {
 	status: document.querySelector("#status"),
 	viewTitle: document.querySelector("#viewTitle"),
 	authState: document.querySelector("#authState"),
+	authMessage: document.querySelector("#authMessage"),
 	userLabel: document.querySelector("#userLabel"),
 	firebaseLabel: document.querySelector("#firebaseLabel"),
 	apiLabel: document.querySelector("#apiLabel"),
@@ -70,6 +71,10 @@ const els = {
 function setStatus(message, tone = "") {
 	els.status.textContent = message;
 	els.status.className = `status ${tone}`.trim();
+	if (els.authMessage) {
+		els.authMessage.textContent = message;
+		els.authMessage.className = `auth-message ${tone}`.trim();
+	}
 }
 
 function isLocalPage() {
@@ -115,31 +120,56 @@ function initializeConnectionFields() {
 		apiFromUrl ||
 		sessionStorage.getItem("aiBrainAdminApiBase") ||
 		defaultApiBase();
-	const tokenFromSession = sessionStorage.getItem("aiBrainAdminToolToken");
-	if (tokenFromSession) {
-		els.token.value = tokenFromSession;
-	} else if (isLocalPage() && runtimeConfig.localDevToken) {
-		els.token.value = runtimeConfig.localDevToken;
+	if (isLocalPage()) {
+		const tokenFromSession = sessionStorage.getItem("aiBrainAdminToolToken");
+		if (tokenFromSession) {
+			els.token.value = tokenFromSession;
+		} else if (runtimeConfig.localDevToken) {
+			els.token.value = runtimeConfig.localDevToken;
+		}
+	} else {
+		els.token.value = "";
+		sessionStorage.removeItem("aiBrainAdminToolToken");
 	}
 	updateConnectionLabels();
 }
 
-function activeToken() {
+function appAccessAllowed() {
+	return (
+		Boolean(state.user) || (isLocalPage() && Boolean(els.token.value.trim()))
+	);
+}
+
+function updateAuthShell() {
+	const allowed = appAccessAllowed();
+	document.body.classList.toggle("is-signed-out", !allowed);
+	document.body.classList.toggle("is-authenticated", allowed);
+	if (!allowed) {
+		activateView("account", true);
+	}
+}
+
+async function activeToken(forceRefresh = false) {
 	const toolToken = els.token.value.trim();
 	sessionStorage.setItem("aiBrainAdminApiBase", els.apiBase.value);
-	if (toolToken) {
+	if (isLocalPage() && toolToken) {
 		sessionStorage.setItem("aiBrainAdminToolToken", toolToken);
 	} else {
 		sessionStorage.removeItem("aiBrainAdminToolToken");
 	}
-	return state.idToken || toolToken;
+	if (state.user) {
+		state.idToken = await state.user.getIdToken(forceRefresh);
+		updateConnectionLabels();
+		return state.idToken;
+	}
+	return isLocalPage() ? toolToken : "";
 }
 
-function requestHeaders() {
+async function requestHeaders({ forceRefresh = false } = {}) {
 	const headers = {
 		"Content-Type": "application/json",
 	};
-	const token = activeToken();
+	const token = await activeToken(forceRefresh);
 	if (token) {
 		headers.Authorization = `Bearer ${token}`;
 	}
@@ -149,12 +179,17 @@ function requestHeaders() {
 async function api(path, options = {}) {
 	let response;
 	const url = `${apiBase()}${path}`;
+	const {
+		forceRefreshToken = false,
+		retriedAuth = false,
+		...fetchOptions
+	} = options;
 	try {
 		response = await fetch(url, {
-			...options,
+			...fetchOptions,
 			headers: {
-				...requestHeaders(),
-				...(options.headers || {}),
+				...(await requestHeaders({ forceRefresh: forceRefreshToken })),
+				...(fetchOptions.headers || {}),
 			},
 		});
 	} catch (error) {
@@ -182,9 +217,30 @@ async function api(path, options = {}) {
 		error.code = data?.error?.code || "";
 		error.endpoint = path;
 		error.details = data?.error?.details;
+		if (!retriedAuth && shouldRefreshFirebaseToken(error)) {
+			setStatus("Refreshing sign-in token...", "");
+			return api(path, {
+				...fetchOptions,
+				forceRefreshToken: true,
+				retriedAuth: true,
+			});
+		}
 		throw error;
 	}
 	return data;
+}
+
+function shouldRefreshFirebaseToken(error) {
+	if (!state.user) {
+		return false;
+	}
+	const text = `${error.code || ""} ${error.message || ""}`.toLowerCase();
+	return (
+		(error.status === 401 || error.status === 500) &&
+		(text.includes("id token has expired") ||
+			text.includes("auth/id-token-expired") ||
+			text.includes("firebase_token_expired"))
+	);
 }
 
 function writeAccount(value) {
@@ -231,16 +287,26 @@ function formatBytes(value = 0) {
 
 function updateConnectionLabels() {
 	els.userLabel.textContent =
-		state.user?.email || state.user?.uid || "Not signed in";
+		state.user?.email ||
+		state.user?.uid ||
+		(isLocalPage() && els.token.value.trim()
+			? "Local dev token"
+			: "Not signed in");
 	els.firebaseLabel.textContent = state.firebaseReady
 		? "Configured"
 		: "Not configured";
 	els.tokenLabel.textContent = state.idToken
 		? "Firebase ID token active"
-		: els.token.value
+		: isLocalPage() && els.token.value
 			? "Tool token active"
 			: "None";
-	els.authState.textContent = state.user ? "Signed in" : "Signed out";
+	els.authState.textContent = state.user
+		? "Signed in"
+		: isLocalPage() && els.token.value.trim()
+			? "Local auth"
+			: "Signed out";
+	document.querySelector("#signOutBtn").hidden = !state.user;
+	updateAuthShell();
 }
 
 function updateEntitlement(entitlement) {
@@ -319,13 +385,16 @@ function clearAccountData() {
 }
 
 function hasAuthToken() {
-	return Boolean(state.idToken || els.token.value.trim());
+	return (
+		Boolean(state.user) || (isLocalPage() && Boolean(els.token.value.trim()))
+	);
 }
 
 function requireAccountAuth(action = "refresh account data") {
 	if (hasAuthToken()) {
 		return true;
 	}
+	activateView("account", true);
 	setStatus(`Sign in to ${action}`, "bad");
 	return false;
 }
@@ -967,7 +1036,11 @@ async function loadAudit() {
 	}
 }
 
-function activateView(view) {
+function activateView(view, bypassAuthGate = false) {
+	if (!bypassAuthGate && !appAccessAllowed()) {
+		view = "account";
+		setStatus("Sign in with Firebase to continue", "bad");
+	}
 	for (const tab of document.querySelectorAll(".tab")) {
 		tab.classList.toggle("is-active", tab.dataset.view === view);
 	}
@@ -1060,4 +1133,8 @@ document.querySelector("#loadAuditBtn").addEventListener("click", loadAudit);
 
 initializeConnectionFields();
 await initializeFirebase();
-await checkHealth();
+if (appAccessAllowed()) {
+	setStatus(state.user ? "Signed in" : "Local auth ready", "good");
+} else {
+	setStatus("Sign in with Firebase to continue.");
+}
