@@ -12,6 +12,9 @@ const state = {
 	events: [],
 	oneTimeKey: "",
 	accountRefresh: null,
+	localAuthExplicit: false,
+	loadedViews: new Set(),
+	viewLoads: {},
 };
 
 const els = {
@@ -124,6 +127,7 @@ function initializeConnectionFields() {
 		const tokenFromSession = sessionStorage.getItem("aiBrainAdminToolToken");
 		if (tokenFromSession) {
 			els.token.value = tokenFromSession;
+			state.localAuthExplicit = true;
 		} else if (runtimeConfig.localDevToken) {
 			els.token.value = runtimeConfig.localDevToken;
 		}
@@ -140,6 +144,10 @@ function appAccessAllowed() {
 	);
 }
 
+function autoLoadAllowed() {
+	return Boolean(state.user) || (isLocalPage() && state.localAuthExplicit);
+}
+
 function updateAuthShell() {
 	const allowed = appAccessAllowed();
 	document.body.classList.toggle("is-signed-out", !allowed);
@@ -154,6 +162,7 @@ async function activeToken(forceRefresh = false) {
 	sessionStorage.setItem("aiBrainAdminApiBase", els.apiBase.value);
 	if (isLocalPage() && toolToken) {
 		sessionStorage.setItem("aiBrainAdminToolToken", toolToken);
+		state.localAuthExplicit = true;
 	} else {
 		sessionStorage.removeItem("aiBrainAdminToolToken");
 	}
@@ -380,6 +389,8 @@ function clearAccountData() {
 	updateUsage(null);
 	renderApiKeys([]);
 	renderActivity([]);
+	state.loadedViews.clear();
+	state.viewLoads = {};
 	writeAccount({});
 	writeBilling({});
 }
@@ -403,16 +414,24 @@ async function refreshSignedInAccount() {
 	if (!requireAccountAuth("refresh account data")) {
 		return;
 	}
+	if (!autoLoadAllowed()) {
+		return;
+	}
 	if (state.accountRefresh) {
 		return state.accountRefresh;
 	}
 	state.accountRefresh = (async () => {
 		setStatus("Loading account data...", "");
-		await bootstrapUser();
-		await loadCategories();
-		await loadMemories();
-		await loadContext(false);
-		await loadAudit();
+		if (await bootstrapUser()) {
+			state.loadedViews.add("account");
+		}
+		if (await loadCategories()) {
+			state.loadedViews.add("capture");
+		}
+		const currentView = activeViewId();
+		if (!state.loadedViews.has(currentView)) {
+			await loadViewData(currentView, { force: true });
+		}
 	})().finally(() => {
 		state.accountRefresh = null;
 	});
@@ -608,7 +627,7 @@ async function checkHealth() {
 
 async function bootstrapUser() {
 	if (!requireAccountAuth("bootstrap your account")) {
-		return;
+		return false;
 	}
 	try {
 		const data = await api("/bootstrap-user", {
@@ -624,8 +643,10 @@ async function bootstrapUser() {
 		renderActivity(data.events || []);
 		writeAccount(data);
 		setStatus("Bootstrap complete", "good");
+		return true;
 	} catch (error) {
 		showApiError(error, writeAccount);
+		return false;
 	} finally {
 		updateConnectionLabels();
 	}
@@ -633,27 +654,31 @@ async function bootstrapUser() {
 
 async function loadUsage() {
 	if (!requireAccountAuth("load usage")) {
-		return;
+		return false;
 	}
 	try {
 		const data = await api("/account/usage");
 		updateUsage(data.usage);
 		setStatus("Usage loaded", "good");
+		return true;
 	} catch (error) {
 		showApiError(error, writeAccount);
+		return false;
 	}
 }
 
 async function loadApiKeys() {
 	if (!requireAccountAuth("load API keys")) {
-		return;
+		return false;
 	}
 	try {
 		const data = await api("/api-keys");
 		renderApiKeys(data.keys || []);
 		setStatus(`${data.keys.length} API keys`, "good");
+		return true;
 	} catch (error) {
 		showApiError(error, writeBilling);
+		return false;
 	}
 }
 
@@ -709,20 +734,22 @@ async function copyOneTimeKey() {
 
 async function loadActivity() {
 	if (!requireAccountAuth("load activity")) {
-		return;
+		return false;
 	}
 	try {
 		const data = await api("/account/events?limit=50");
 		renderActivity(data.events || []);
 		setStatus(`${data.events.length} events`, "good");
+		return true;
 	} catch (error) {
 		showApiError(error, writeAccount);
+		return false;
 	}
 }
 
 async function refreshEntitlement() {
 	if (!requireAccountAuth("load subscription plan")) {
-		return;
+		return false;
 	}
 	try {
 		const data = await api("/billing/entitlement");
@@ -734,8 +761,10 @@ async function refreshEntitlement() {
 				: "Cloud entitlement inactive",
 			data.entitlement.cloud ? "good" : "",
 		);
+		return true;
 	} catch (error) {
 		showApiError(error, writeBilling);
+		return false;
 	}
 }
 
@@ -818,7 +847,7 @@ async function localSubscription(path, label) {
 
 async function loadCategories() {
 	if (!requireAccountAuth("load categories")) {
-		return;
+		return false;
 	}
 	try {
 		const data = await api("/categories");
@@ -831,8 +860,10 @@ async function loadCategories() {
 				return option;
 			}),
 		);
+		return true;
 	} catch (error) {
 		showApiError(error);
+		return false;
 	}
 }
 
@@ -953,7 +984,7 @@ function memoryItem(memory) {
 
 async function loadMemories() {
 	if (!requireAccountAuth("load memories")) {
-		return;
+		return false;
 	}
 	try {
 		const params = new URLSearchParams();
@@ -966,8 +997,10 @@ async function loadMemories() {
 		const data = await api(`/memories?${params.toString()}`);
 		els.memoryList.replaceChildren(...data.memories.map(memoryItem));
 		setStatus(`${data.memories.length} memories`, "good");
+		return true;
 	} catch (error) {
 		showApiError(error);
+		return false;
 	}
 }
 
@@ -990,7 +1023,7 @@ async function runMemoryAction(id, action) {
 
 async function loadContext(rebuild = false) {
 	if (!requireAccountAuth(rebuild ? "rebuild context" : "load context")) {
-		return;
+		return false;
 	}
 	try {
 		const project = encodeURIComponent(els.contextProject.value);
@@ -999,6 +1032,7 @@ async function loadContext(rebuild = false) {
 		const data = await api(path, { method: rebuild ? "POST" : "GET" });
 		els.contextOutput.textContent = JSON.stringify(data, null, 2);
 		setStatus(rebuild ? "Context rebuilt" : "Context loaded", "good");
+		return true;
 	} catch (error) {
 		els.contextOutput.textContent = JSON.stringify(
 			apiErrorDetails(error),
@@ -1006,6 +1040,7 @@ async function loadContext(rebuild = false) {
 			2,
 		);
 		setStatus(error.message, "bad");
+		return false;
 	}
 }
 
@@ -1029,15 +1064,62 @@ function auditItem(event) {
 
 async function loadAudit() {
 	if (!requireAccountAuth("load audit events")) {
-		return;
+		return false;
 	}
 	try {
 		const data = await api("/audit");
 		els.auditList.replaceChildren(...data.events.map(auditItem));
 		setStatus(`${data.events.length} audit events`, "good");
+		return true;
 	} catch (error) {
 		showApiError(error);
+		return false;
 	}
+}
+
+function activeViewId() {
+	return document.querySelector(".view.is-active")?.id || "account";
+}
+
+async function loadViewData(view, { force = false } = {}) {
+	if (!appAccessAllowed() || !autoLoadAllowed()) {
+		return false;
+	}
+	if (!force && state.loadedViews.has(view)) {
+		return true;
+	}
+	if (state.viewLoads[view]) {
+		return state.viewLoads[view];
+	}
+
+	const loaders = {
+		account: bootstrapUser,
+		billing: refreshEntitlement,
+		apiKeys: loadApiKeys,
+		usage: loadUsage,
+		activity: loadActivity,
+		capture: loadCategories,
+		memories: loadMemories,
+		context: () => loadContext(false),
+		audit: loadAudit,
+	};
+	const loader = loaders[view];
+	if (!loader) {
+		return false;
+	}
+
+	state.viewLoads[view] = Promise.resolve(loader())
+		.then((loaded) => {
+			if (loaded !== false) {
+				state.loadedViews.add(view);
+				return true;
+			}
+			return false;
+		})
+		.finally(() => {
+			delete state.viewLoads[view];
+		});
+	return state.viewLoads[view];
 }
 
 function activateView(view, bypassAuthGate = false) {
@@ -1063,6 +1145,7 @@ function activateView(view, bypassAuthGate = false) {
 		audit: "Audit Trail",
 	};
 	els.viewTitle.textContent = titles[view] || "AI Brain";
+	void loadViewData(view);
 }
 
 document.querySelectorAll(".tab").forEach((tab) => {
@@ -1080,8 +1163,11 @@ document.querySelector("#signOutBtn").addEventListener("click", signOutUser);
 document.querySelector("#healthBtn").addEventListener("click", checkHealth);
 document.querySelector("#localTokenBtn").addEventListener("click", () => {
 	els.token.value = runtimeConfig.localDevToken || "dev-local-token";
+	state.localAuthExplicit = true;
+	state.loadedViews.clear();
 	updateConnectionLabels();
 	setStatus("Local dev token loaded", "good");
+	void refreshSignedInAccount();
 });
 document
 	.querySelector("#bootstrapBtn")
