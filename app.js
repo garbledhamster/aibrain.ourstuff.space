@@ -964,13 +964,17 @@ function memoryItem(memory) {
 
 	const actions = document.createElement("div");
 	actions.className = "item-actions";
-	[
+	const actionsForMemory = [
 		["Approve", "approve"],
 		["Lock", "lock"],
 		["Archive", "archive"],
 		["Reject", "reject"],
 		["Delete", "delete"],
-	].forEach(([label, action]) => {
+	];
+	if (shouldShowReprocess(memory)) {
+		actionsForMemory.unshift(["Reprocess", "reprocess"]);
+	}
+	actionsForMemory.forEach(([label, action]) => {
 		const button = document.createElement("button");
 		button.type = "button";
 		button.textContent = label;
@@ -980,6 +984,16 @@ function memoryItem(memory) {
 
 	item.append(head, chips, actions);
 	return item;
+}
+
+function shouldShowReprocess(memory) {
+	const classifier = memory.classifier || {};
+	return (
+		classifier.version === "local-v1" &&
+		/(OpenRouter|unavailable|fallback)/i.test(
+			`${classifier.reason || ""} ${classifier.model || ""}`,
+		)
+	);
 }
 
 async function loadMemories() {
